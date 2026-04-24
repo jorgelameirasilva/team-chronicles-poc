@@ -1,0 +1,13 @@
+{
+  "name": "chronicle-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "chronicle-mcp": "server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "gray-matter": "^4.0.3",
+    "minimatch": "^9.0.3"
+  }
+}

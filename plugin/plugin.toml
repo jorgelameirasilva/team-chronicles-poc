@@ -1,0 +1,15 @@
+name = "chronicle-team"
+version = "0.1.0"
+description = "Shared team knowledge base retrieval and promotion"
+
+[[skills]]
+path = "skills/consult-chronicle"
+
+[[skills]]
+path = "skills/promote-memory"
+
+[[mcp_servers]]
+name = "chronicle"
+command = "node"
+args = ["mcp/server.js"]
+env = { CHRONICLES_ROOT = "${CHRONICLES_ROOT}" }

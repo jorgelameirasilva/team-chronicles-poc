@@ -1,0 +1,6 @@
+shared/**                @eng-leads
+teams/platform/**        @platform-team
+teams/growth/**          @growth-team
+projects/**              @eng-leads
+private/security/**      @security-team
+private/compliance/**    @legal @security-team
