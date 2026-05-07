@@ -1,0 +1,30 @@
+{
+  "name": "team-chronicles",
+  "version": "0.2.0",
+  "description": "Team knowledge base — git-backed chronicles, retrieval via MCP, hooks for auto-sync / auto-consult / auto-promote.",
+  "author": {
+    "name": "Jorge Silva",
+    "url": "https://github.com/jorgelameirasilva"
+  },
+  "homepage": "https://github.com/jorgelameirasilva/team-chronicles-poc",
+  "repository": "https://github.com/jorgelameirasilva/team-chronicles-poc",
+  "license": "MIT",
+  "keywords": ["knowledge-base", "chronicles", "team", "memory", "rag"],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Team Chronicles",
+    "shortDescription": "Git-backed team knowledge base, auto-retrieved + auto-curated.",
+    "longDescription": "Maintains a separate KB repo of chronicle atoms (decisions, patterns, runbooks, references). SessionStart syncs and primes; UserPromptSubmit injects retrieval matches as <team-chronicle> blocks; Stop queues durable findings for promotion. Skills: consult-chronicle, promote-memory, ingest-source, import-knowledge, lint-chronicles, bootstrap-kb.",
+    "developerName": "Jorge Silva",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "What did the team decide about X?",
+      "Save this as a team chronicle.",
+      "Import our Confluence space into chronicles."
+    ],
+    "brandColor": "#0369a1"
+  }
+}
