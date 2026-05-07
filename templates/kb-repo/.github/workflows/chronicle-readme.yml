@@ -8,9 +8,12 @@ on:
       - 'scripts/build-tree.js'
       - 'scripts/update-readme.js'
       - 'scripts/update-indexes.js'
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   regenerate:
@@ -30,19 +33,39 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Regenerate indexes + README tree
+      - name: Regenerate indexes + README tree + interactive viewer
         run: |
           node scripts/update-indexes.js
           node scripts/update-readme.js
+          mkdir -p docs
+          node scripts/build-tree.js --html docs/index.html
 
       - name: Commit if changed
         run: |
           git config user.name 'chronicle-bot'
           git config user.email 'chronicle-bot@users.noreply.github.com'
-          git add README.md chronicles/**/index.md || true
+          git add README.md docs/index.html chronicles/**/index.md || true
           if git diff --cached --quiet; then
             echo "No changes."
             exit 0
           fi
-          git commit -m "chronicles: regenerate tree + indexes [skip ci]"
+          git commit -m "chronicles: regenerate tree + indexes + viewer [skip ci]"
           git push
+
+  deploy-pages:
+    needs: regenerate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        continue-on-error: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+        continue-on-error: true
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
