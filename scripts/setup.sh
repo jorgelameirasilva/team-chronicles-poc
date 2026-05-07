@@ -74,6 +74,26 @@ is_url() {
   [[ "$1" =~ ^(https://|git@|git://|ssh://) ]] || [[ "$1" == *.git ]]
 }
 
+repo_has_commits() {
+  git -C "$1" rev-parse HEAD >/dev/null 2>&1
+}
+
+# Copy templates/kb-repo/ contents into an existing dir (already a git repo
+# OR plain dir). Substitutes placeholders, runs npm install. No git init.
+scaffold_into_existing() {
+  local target="$1"
+  local name="${GH_NAME:-$(basename "$target")}"
+  echo "→ Scaffolding chronicle template into $target (name=$name)"
+  cp -R "$PLUGIN_REPO/templates/kb-repo/." "$target/"
+  if [[ -f "$target/README.md" ]]; then
+    sed -i.bak "s|{{KB_NAME}}|$name|g" "$target/README.md" && rm -f "$target/README.md.bak"
+  fi
+  if [[ -f "$target/package.json" ]]; then
+    sed -i.bak "s|\"name\": \"team-chronicles\"|\"name\": \"$name\"|" "$target/package.json" && rm -f "$target/package.json.bak"
+  fi
+  ( cd "$target" && npm install --silent ) || echo "→ npm install failed; continue"
+}
+
 # --- 1. Resolve KB_PATH -----------------------------------------------------
 
 KB_PATH=""
@@ -82,18 +102,28 @@ if is_url "$KB"; then
   REPO_NAME="$(basename "$KB" .git)"
   KB_PATH="${INTO:-$HOME/dev/$REPO_NAME}"
   KB_PATH="${KB_PATH/#~/$HOME}"
+
   if [[ -d "$KB_PATH/.git" ]]; then
-    echo "→ Pulling existing clone at $KB_PATH"
-    git -C "$KB_PATH" pull --ff-only
+    if repo_has_commits "$KB_PATH"; then
+      echo "→ Pulling existing clone at $KB_PATH"
+      git -C "$KB_PATH" pull --ff-only || echo "→ Pull failed (likely diverged); continue with local"
+    else
+      echo "→ Existing empty clone at $KB_PATH; will scaffold into it"
+    fi
   else
     mkdir -p "$(dirname "$KB_PATH")"
     echo "→ Cloning $KB → $KB_PATH"
     git clone "$KB" "$KB_PATH"
   fi
+
+  # If cloned an empty repo, force HEAD onto main so the first commit lands there
+  if ! repo_has_commits "$KB_PATH"; then
+    git -C "$KB_PATH" symbolic-ref HEAD refs/heads/main
+  fi
 else
   KB_PATH="${KB/#~/$HOME}"
   if [[ ! -d "$KB_PATH" ]]; then
-    echo "→ Path $KB_PATH does not exist; scaffolding from template"
+    echo "→ Path $KB_PATH does not exist; bootstrapping fresh repo from template"
     SCAFFOLD_ARGS=("$KB_PATH")
     SCAFFOLD_ARGS+=(--name "${GH_NAME:-$(basename "$KB_PATH")}")
     if [[ "$GH_CREATE" -eq 1 ]]; then
@@ -104,7 +134,30 @@ else
 fi
 
 KB_PATH="$(cd "$KB_PATH" && pwd)"
-[[ -d "$KB_PATH/chronicles" ]] || { echo "Error: $KB_PATH has no chronicles/ subdir. Wrong repo?"; exit 1; }
+
+# --- 1b. Auto-scaffold into existing repo if no chronicles/ -----------------
+
+if [[ ! -d "$KB_PATH/chronicles" ]]; then
+  scaffold_into_existing "$KB_PATH"
+
+  if [[ -d "$KB_PATH/.git" ]]; then
+    git -C "$KB_PATH" add .
+    if ! git -C "$KB_PATH" diff --cached --quiet; then
+      git -C "$KB_PATH" -c user.email="chronicle-bot@local" -c user.name="chronicle-bot" \
+        commit -q -m "chronicles: scaffold from chronicle-team plugin template"
+      echo "→ Committed scaffold to $(basename "$KB_PATH")"
+    fi
+    if git -C "$KB_PATH" remote get-url origin >/dev/null 2>&1; then
+      if git -C "$KB_PATH" push -u origin HEAD 2>/dev/null; then
+        echo "→ Pushed scaffold to origin"
+      else
+        echo "→ Push failed; do it manually: git -C $KB_PATH push -u origin HEAD"
+      fi
+    fi
+  fi
+fi
+
+[[ -d "$KB_PATH/chronicles" ]] || { echo "Error: scaffold failed; $KB_PATH still has no chronicles/"; exit 1; }
 
 # --- 2. Codex hooks feature flag -------------------------------------------
 
