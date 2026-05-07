@@ -217,6 +217,17 @@ else
   echo "    codex plugin marketplace add $PLUGIN_REPO"
 fi
 
+# --- 7b. Install memory-watcher daemon -------------------------------------
+# Watches ~/.codex/memories and ~/.codex/memories_extensions/chronicle for new
+# auto-generated memories from Codex. Runs harvest.js on each new file → atom
+# drafts → branch + push to KB. Auto-PR if CHRONICLE_AUTO_PR=1.
+
+if "$PLUGIN_REPO/scripts/install-watcher.sh" 2>&1 | sed 's/^/  /'; then
+  echo "✓ Memory watcher installed"
+else
+  echo "→ Memory watcher install failed; run manually: ./scripts/install-watcher.sh"
+fi
+
 # --- 8. Auto-source from shell rc ------------------------------------------
 
 if [[ "$SKIP_SHELL_RC" -eq 0 ]]; then

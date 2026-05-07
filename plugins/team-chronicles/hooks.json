@@ -25,6 +25,18 @@
         ]
       }
     ],
+    "PreCompact": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CHRONICLE_PLUGIN}/hooks/pre-compact.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": ".*",
@@ -32,7 +44,7 @@
           {
             "type": "command",
             "command": "bash ${CHRONICLE_PLUGIN}/hooks/stop.sh",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }
