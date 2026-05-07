@@ -78,25 +78,26 @@ What it produces:
 
 ## Plugin layout (canonical Codex marketplace format)
 
+Per [`codex-rs/core-plugins/src/marketplace.rs`](https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace.rs): `marketplace.json` lives at `.agents/plugins/marketplace.json` (repo-scoped); plugin `source.path` is resolved relative to **repo root**, not relative to `marketplace.json`.
+
 ```
-.agents/plugins/
-  marketplace.json                  # registers team-chronicles plugin
-  plugins/team-chronicles/
-    .codex-plugin/plugin.json       # JSON manifest (name, version, paths, interface)
-    .mcp.json                       # MCP server config
-    hooks.json                      # SessionStart / UserPromptSubmit / Stop
-    hooks/                          # hook shell scripts
-    skills/
-      consult-chronicle/            # explicit search
-      promote-memory/               # session → draft chronicle
-      ingest-source/                # one raw doc → atoms
-      import-knowledge/             # bulk via Codex plugins (Rovo/Notion/Drive/Slack/DB)
-      lint-chronicles/              # weekly audit pass
-      bootstrap-kb/                 # scaffold a new KB repo
-    mcp/
-      server.js                     # MCP server: search_chronicles, get_chronicle, propose_chronicle
-      index.js                      # shared loader + lexical search
-      search.js                     # CLI one-shot wrapper
+.agents/plugins/marketplace.json    # registers team-chronicles
+plugins/team-chronicles/             # ./plugins/<name> resolves here from repo root
+  .codex-plugin/plugin.json          # JSON manifest (name, version, paths, interface)
+  .mcp.json                          # MCP server config
+  hooks.json                         # SessionStart / UserPromptSubmit / Stop
+  hooks/                             # hook shell scripts
+  skills/
+    consult-chronicle/               # explicit search
+    promote-memory/                  # session → draft chronicle
+    ingest-source/                   # one raw doc → atoms
+    import-knowledge/                # bulk via Codex plugins (Rovo/Notion/Drive/Slack/DB)
+    lint-chronicles/                 # weekly audit pass
+    bootstrap-kb/                    # scaffold a new KB repo
+  mcp/
+    server.js                        # MCP server: search_chronicles, get_chronicle, propose_chronicle
+    index.js                         # shared loader + lexical search
+    search.js                        # CLI one-shot wrapper
 ```
 
 `setup.sh` runs `codex plugin marketplace add <repo-root>` so Codex finds the marketplace.json. The plugin then shows up under `/plugins` for install + enable. User-level `~/.codex/hooks.json` is also written so hooks fire regardless of plugin install state.

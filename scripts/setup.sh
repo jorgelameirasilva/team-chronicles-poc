@@ -164,7 +164,7 @@ fi
 #   $PLUGIN_REPO/.agents/plugins/plugins/team-chronicles/
 # Marketplace manifest at
 #   $PLUGIN_REPO/.agents/plugins/marketplace.json
-PLUGIN_DIR="$PLUGIN_REPO/.agents/plugins/plugins/team-chronicles"
+PLUGIN_DIR="$PLUGIN_REPO/plugins/team-chronicles"
 [[ -f "$PLUGIN_DIR/.codex-plugin/plugin.json" ]] || { echo "Error: $PLUGIN_DIR/.codex-plugin/plugin.json missing — wrong plugin repo?"; exit 1; }
 
 # --- 3. Chronicles symlink (used by hooks + MCP at runtime) -----------------
