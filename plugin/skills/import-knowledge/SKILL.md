@@ -1,75 +1,87 @@
 ---
 name: import-knowledge
-description: Bulk-import external knowledge sources into the chronicles knowledge base. Currently supports Confluence spaces, database schemas (Postgres/MySQL), Notion, Google Drive, and Slack exports. Use when seeding a fresh KB ("import our Confluence space", "map the prod database", "ingest the engineering wiki", "bootstrap chronicles from existing docs") or when adding a brand-new system to the team that needs full coverage.
+description: Bulk-import external knowledge sources into the chronicles knowledge base by delegating entirely to existing Codex plugins (Rovo for Atlassian, native connectors for Notion / Drive / Slack, the database plugin for schema introspection). No tokens, no env vars — Codex already holds the org auth. Use when seeding a fresh KB ("import our Confluence space", "map the prod database", "ingest the engineering wiki") or when adding a brand-new system to the team that needs full coverage.
 ---
 
 # import-knowledge
 
-One skill, many adapters. Pulls bulk content from an external system into `chronicles/raw/<source>-<YYYY-MM-DD>/`, then chains into `ingest-source` to convert raw → atoms → draft PR.
+Bootstrap path. Pulls bulk content into `chronicles/raw/<source>-<YYYY-MM-DD>/`, then chains into `ingest-source` to convert raw → atoms → draft PR.
 
-This is the **bootstrap** path — opposite of `promote-memory` (one atom from a session) or `ingest-source` (one already-local document). Use when you need to seed or re-seed the KB at scale.
+Opposite of `promote-memory` (one atom from a session) and `ingest-source` (one already-local document). Use when seeding or re-seeding the KB at scale.
 
-## Sources supported
+## Core principle
 
-| Source | Adapter script | Required env |
-|---|---|---|
-| Confluence | `scripts/import/confluence.js` | `CONFLUENCE_BASE_URL`, `CONFLUENCE_TOKEN`, `CONFLUENCE_SPACE` |
-| Database (Postgres/MySQL) | `scripts/import/database.js` | `DATABASE_URL` |
-| Notion | `scripts/import/notion.js` (stub) | `NOTION_TOKEN`, `NOTION_DB_ID` |
-| Google Drive folder | `scripts/import/gdrive.js` (stub) | `GDRIVE_FOLDER_ID`, OAuth |
-| Slack export ZIP | `scripts/import/slack.js` (stub) | local ZIP path |
+**Never call external APIs directly.** Every supported source already has a Codex plugin / connector / MCP that owns auth + audit + rate-limit. This skill is glue: ask the right plugin, write results to `raw/`, chain into ingestion.
+
+## Sources + delegate
+
+| Source | Delegate to | Ask for | Output dir |
+|---|---|---|---|
+| Confluence | `@rovo` (Atlassian Rovo plugin) | space + filters → pages w/ id, title, url, labels, body, last-modified | `raw/confluence-<date>/` |
+| Jira | `@rovo` | project + JQL → issues w/ key, summary, description, status, comments | `raw/jira-<date>/` |
+| Notion | Notion plugin | workspace / db id → pages w/ properties + body | `raw/notion-<date>/` |
+| Google Drive | Drive plugin | folder id → docs w/ title + body | `raw/gdrive-<date>/` |
+| Slack | Slack plugin | channel + date range → messages w/ thread structure | `raw/slack-<channel>-<date>/` |
+| Database | DB plugin / MCP (already configured in Codex) | database name + schema → tables w/ columns, indexes, FKs, comments | `raw/database-<dbname>-<date>/` |
 
 ## When to invoke
 
-- User: "import our Confluence space", "bootstrap KB from wiki", "map the database schema as chronicles", "seed chronicles from `<source>`"
+- User: "import our Confluence space `<X>`"
+- User: "map the `<dbname>` database as chronicles"
+- User: "bootstrap KB from wiki / Notion / Drive"
 - A team is onboarding chronicles for the first time
 - A new system / service joins the company and needs coverage
 
-## How
+## Flow (any source)
 
-1. **Pick source + scope** with the user. Confirm:
-   - Which space / DB / folder
-   - Target team (scopes write paths)
-   - Filters: page-label, schema name, modified-since date
-2. **Run adapter** — outputs markdown files into `chronicles/raw/<source>-<YYYY-MM-DD>/`. Source files keep their original titles + add a manifest `_index.json` listing `{path, source_url, fetched_at}`.
-3. **Pre-flight scrub**:
-   - Run gitleaks on the raw output dir. Abort on any hit.
-   - Run a privacy pass: redact emails, internal hostnames, customer names. Skill flags candidates; user approves before continue.
-4. **Invoke `ingest-source`** in batch mode: for each file under `raw/<source>-<date>/`, extract atoms via MCP `propose_chronicle`. Cross-link atoms within the same source via `related:`.
-5. **Append `log.md`** entries:
-   `## [YYYY-MM-DD HH:MM] import | <source>:<scope> → N atoms (raw/<source>-<date>/)`
-6. **Open PR**: branch `chronicle/import-<source>-<date>`. PR description includes the manifest + summary count per type.
+1. **Ask the user only what's missing** — name of space / project / db / channel + target team. **Never** ask for tokens, hosts, URLs, or credentials.
+2. **Confirm scope**: filters (labels / JQL / modified-since), skip rules (`private`, `draft`, `pii`, `wip` by default), team scope for resulting atoms.
+3. **Delegate to plugin**: invoke the Codex plugin for the source via `@<plugin>` or natural-language reference. Capture structured response (one record per page / issue / table).
+4. **Write to `raw/`**: one markdown file per record. Frontmatter encodes provenance; body is the imported content.
 
-## Confluence adapter
+   ```yaml
+   ---
+   source: confluence | jira | notion | gdrive | slack | database
+   source_id: <id>
+   source_url: <url>           # if applicable
+   title: <title>
+   labels: [...]               # if applicable
+   fetched_at: <ISO>
+   last_modified: <ISO>        # if applicable
+   ---
 
-```bash
-export CONFLUENCE_BASE_URL=https://acme.atlassian.net/wiki
-export CONFLUENCE_TOKEN=<api-token>          # never commit
-export CONFLUENCE_SPACE=ENG
-node scripts/import/confluence.js --since 2026-01-01 --limit 200
-```
+   # <title>
 
-Pulls pages via `/rest/api/content`, paginates, converts storage XHTML → markdown via `turndown`. Skips pages with the `private`, `draft`, or `pii` labels.
+   <body>
+   ```
 
-## Database adapter
+5. **Manifest**: write `_index.json` in the output dir listing every file with `{path, source_id, source_url, title}`.
+6. **Pre-flight scrub**:
+   - Run gitleaks against the output dir. Abort on hit.
+   - Privacy pass: redact emails, internal hostnames, customer names. Flag candidates; user approves before continuing.
+7. **Chain to `ingest-source`**: invoke for each file under the new `raw/` dir. Cross-link atoms from the same source via `related:`.
+8. **Append `log.md`**: `## [YYYY-MM-DD HH:MM] import | <source>:<scope> → N atoms (raw/<source>-<date>/)`.
+9. **Open PR**: branch `chronicle/import-<source>-<date>`. PR description includes the delegate plugin used, query/filters, manifest summary, and atom counts per type.
 
-```bash
-export DATABASE_URL=postgres://readonly@prod-replica/app
-node scripts/import/database.js --schema public --output reference
-```
+## Database-specific notes
 
-Introspects `information_schema` for tables, columns, indexes, FKs, comments. Emits one markdown file per table to `raw/database-<date>/<schema>.<table>.md`. Generated atoms become `type: reference`, tagged with schema name. Read-only credentials only — adapter refuses if user has write privs.
+- Codex DB plugin is already configured — just ask the user "which database?" by name.
+- For each table, capture: columns (name, type, nullable, default, comment), indexes, foreign keys, table comment.
+- Generated atoms become `type: reference`, tagged with schema + table.
+- One atom per table by default. Combine into a single atom only when the table is trivial and tightly coupled to a parent.
 
 ## Skip / never
 
-- Never import secrets — gitleaks gate is not optional
-- Never auto-merge import PR — review gate enforced via CODEOWNERS
+- Never ask for tokens, API keys, connection strings, or hostnames — that's the plugin's job
+- Never call external APIs directly when a Codex plugin exists — bypasses org auth + audit
+- Never auto-merge import PR — CODEOWNERS gate enforced
 - Never delete raw/ files post-import — atoms cite them by path
 - Never import customer data (PII) without explicit user opt-in per source
+- gitleaks gate is not optional
 
 ## Post
 
 Tell user:
-- "Imported N raw files from `<source>` into `raw/<source>-<date>/`."
+- "Imported N raw records from `<source>` into `raw/<source>-<date>/` via `<plugin>`."
 - "Generated M draft atoms across types: decision=X, pattern=Y, reference=Z."
 - "PR opened: `<url>`. Tree-diff comment will appear on the PR when CI completes."

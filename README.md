@@ -52,7 +52,7 @@ codex
 - `consult-chronicle` — explicit search when auto-retrieval missed
 - `promote-memory` — convert session knowledge → draft chronicle
 - `ingest-source` — compile a single raw doc → draft chronicle atoms
-- `import-knowledge` — bulk import from Confluence / database / Notion / Drive / Slack export
+- `import-knowledge` — bulk import via existing Codex plugins only (Rovo for Confluence/Jira, Notion, Drive, Slack, DB plugin). No tokens, no env — Codex owns auth.
 - `lint-chronicles` — audit stale / orphan / contradictory entries
 
 ## Frontmatter
