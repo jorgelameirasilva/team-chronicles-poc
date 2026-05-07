@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "global_read": ["shared/**"],
+  "private_paths": ["private/**"],
+  "teams": {}
+}

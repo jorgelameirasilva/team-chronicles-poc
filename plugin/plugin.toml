@@ -17,6 +17,9 @@ path = "skills/lint-chronicles"
 [[skills]]
 path = "skills/import-knowledge"
 
+[[skills]]
+path = "skills/bootstrap-kb"
+
 [[mcp_servers]]
 name = "chronicle"
 command = "node"

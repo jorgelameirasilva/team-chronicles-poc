@@ -1,0 +1,11 @@
+# GitHub CODEOWNERS — gates PR approval per scope.
+# Replace placeholders with real GitHub team handles before pushing.
+#
+# Path pattern              Owners (one or more)
+shared/**                   @your-org/eng-leads
+projects/**                 @your-org/eng-leads
+private/security/**         @your-org/security-team
+private/compliance/**       @your-org/legal @your-org/security-team
+
+# Per-team paths — add a line per team:
+# teams/<slug>/**           @your-org/<slug>-team
