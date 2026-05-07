@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Stop: async enqueue harvest job. Never blocks. Never crashes the session.
 
-# Stop: async enqueue harvest job. Never blocks.
+set -uo pipefail   # no -e
 
-PLUGIN_DIR="${CHRONICLE_PLUGIN:-$HOME/.chronicle-team/plugin}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="${CHRONICLE_PLUGIN:-$(cd "$HERE/.." && pwd)}"
 QUEUE_DIR="${CHRONICLE_QUEUE:-$HOME/.chronicle-team/queue}"
-mkdir -p "$QUEUE_DIR"
 
-# Dump stdin (session transcript payload) into queue file for out-of-band processing
+mkdir -p "$QUEUE_DIR" 2>/dev/null || true
+
 TS=$(date +%s)
-cat > "$QUEUE_DIR/session-$TS.json"
+QUEUE_FILE="$QUEUE_DIR/session-$TS.json"
+cat > "$QUEUE_FILE" 2>/dev/null || true
 
-# Fire-and-forget harvester. Real impl: spawn sandboxed codex agent.
-(nohup node "$PLUGIN_DIR/../scripts/harvest.js" "$QUEUE_DIR/session-$TS.json" >/dev/null 2>&1 &) || true
+# Fire-and-forget harvester (stub — real impl runs codex exec to extract atoms)
+HARVEST="$PLUGIN_DIR/../../scripts/harvest.js"
+if [[ -f "$HARVEST" ]] && [[ -f "$QUEUE_FILE" ]]; then
+  (nohup node "$HARVEST" "$QUEUE_FILE" >/dev/null 2>&1 &) || true
+fi
 
 echo '{}'

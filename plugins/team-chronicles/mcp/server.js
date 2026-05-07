@@ -7,13 +7,17 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { search, format, loadChronicles } from './index.js';
 
-const ROOT = process.env.CHRONICLES_ROOT;
-if (!ROOT) {
-  console.error('CHRONICLES_ROOT not set');
+// Codex doesn't expand ${VAR} inside .mcp.json. Pull from process env if set,
+// otherwise fall back to the canonical symlink that setup.sh creates.
+const FALLBACK = join(homedir(), '.chronicle-team-chronicles');
+const ROOT = process.env.CHRONICLES_ROOT || FALLBACK;
+if (!existsSync(ROOT)) {
+  console.error(`CHRONICLES_ROOT not found at ${ROOT}. Run setup.sh first.`);
   process.exit(1);
 }
 

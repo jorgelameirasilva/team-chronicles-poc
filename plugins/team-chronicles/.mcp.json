@@ -2,12 +2,8 @@
   "mcpServers": {
     "chronicle": {
       "command": "node",
-      "args": ["./mcp/server.js"],
-      "env": {
-        "CHRONICLES_ROOT": "${CHRONICLES_ROOT}",
-        "CHRONICLE_TEAM": "${CHRONICLE_TEAM}",
-        "CHRONICLE_QUEUE": "${CHRONICLE_QUEUE}"
-      }
+      "args": ["mcp/server.js"],
+      "cwd": "."
     }
   }
 }
