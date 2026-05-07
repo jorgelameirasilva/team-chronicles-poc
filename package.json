@@ -1,0 +1,16 @@
+{
+  "name": "team-chronicles-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tree:json": "node scripts/build-tree.js --json",
+    "tree:mermaid": "node scripts/build-tree.js --mermaid",
+    "readme:update": "node scripts/update-readme.js",
+    "indexes:update": "node scripts/update-indexes.js",
+    "pr:comment": "node scripts/pr-comment.js"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  }
+}

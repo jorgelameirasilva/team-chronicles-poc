@@ -1,0 +1,48 @@
+name: chronicle-readme
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'chronicles/**'
+      - 'scripts/build-tree.js'
+      - 'scripts/update-readme.js'
+      - 'scripts/update-indexes.js'
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Regenerate indexes + README tree
+        run: |
+          node scripts/update-indexes.js
+          node scripts/update-readme.js
+
+      - name: Commit if changed
+        run: |
+          git config user.name 'chronicle-bot'
+          git config user.email 'chronicle-bot@users.noreply.github.com'
+          git add README.md chronicles/**/index.md || true
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "chronicles: regenerate tree + indexes [skip ci]"
+          git push

@@ -1,0 +1,56 @@
+name: chronicle-pr-tree
+
+on:
+  pull_request:
+    paths:
+      - 'chronicles/**'
+      - 'scripts/build-tree.js'
+      - 'scripts/pr-comment.js'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    env:
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build PR comment
+        id: build
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch origin "$BASE_BRANCH" --depth=1
+          node scripts/pr-comment.js > /tmp/comment.md
+          echo "Generated comment head:"
+          head -5 /tmp/comment.md
+          if grep -q '^<!-- ' /tmp/comment.md && [ "$(wc -l < /tmp/comment.md)" -le 1 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upsert comment
+        if: steps.build.outputs.skip == 'false'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: chronicle-tree
+          path: /tmp/comment.md

@@ -8,6 +8,15 @@ path = "skills/consult-chronicle"
 [[skills]]
 path = "skills/promote-memory"
 
+[[skills]]
+path = "skills/ingest-source"
+
+[[skills]]
+path = "skills/lint-chronicles"
+
+[[skills]]
+path = "skills/import-knowledge"
+
 [[mcp_servers]]
 name = "chronicle"
 command = "node"
