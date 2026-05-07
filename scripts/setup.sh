@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One-shot, non-interactive setup for the chronicle-team plugin.
+#
+# Resolves the knowledge-base repo (clones if URL, scaffolds if missing),
+# wires hooks + MCP into ~/.codex/, writes ~/.chronicle-team.env, and
+# auto-sources it from your shell rc.
+#
+# Usage:
+#   ./scripts/setup.sh --kb <url|path> --team <slug> [options]
+#
+# Required:
+#   --kb <url|path>      Git URL (clones it) OR local path (uses or scaffolds).
+#                        URL examples:
+#                          https://github.com/org/team-chronicles.git
+#                          git@github.com:org/team-chronicles.git
+#                        Path examples:
+#                          ~/dev/team-chronicles      (existing or new)
+#   --team <slug>        Sets CHRONICLE_TEAM in env (e.g. platform, growth)
+#
+# Optional:
+#   --into <path>        Where to clone the URL (default: ~/dev/<repo-name>)
+#   --gh-create          When scaffolding a missing path, also create + push
+#                        the GitHub remote via `gh` (uses basename as repo name)
+#   --gh-private         When --gh-create, make the repo private (default)
+#   --gh-public          When --gh-create, make the repo public
+#   --gh-name <name>     Override repo name for `gh repo create`
+#   --no-shell-rc        Skip auto-appending to ~/.zshrc / ~/.bashrc
+#
+# Examples:
+#
+#   # Existing KB on GitHub — clone + wire
+#   ./scripts/setup.sh --kb git@github.com:acme/team-chronicles.git --team platform
+#
+#   # KB already cloned locally — wire only
+#   ./scripts/setup.sh --kb ~/dev/team-chronicles --team platform
+#
+#   # Brand new KB — scaffold + push to GitHub
+#   ./scripts/setup.sh --kb ~/dev/team-chronicles --team platform --gh-create
+
+PLUGIN_REPO="$(cd "$(dirname "$0")/.." && pwd)"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+PLUGIN_DEST="$CODEX_HOME/plugins/chronicle-team"
+ENV_FILE="$HOME/.chronicle-team.env"
+
+KB=""
+TEAM=""
+INTO=""
+GH_CREATE=0
+GH_VIS="--private"
+GH_NAME=""
+SKIP_SHELL_RC=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --kb) KB="$2"; shift 2 ;;
+    --team) TEAM="$2"; shift 2 ;;
+    --into) INTO="$2"; shift 2 ;;
+    --gh-create) GH_CREATE=1; shift ;;
+    --gh-private) GH_VIS="--private"; shift ;;
+    --gh-public) GH_VIS="--public"; shift ;;
+    --gh-name) GH_NAME="$2"; shift 2 ;;
+    --no-shell-rc) SKIP_SHELL_RC=1; shift ;;
+    -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+    *) echo "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+[[ -z "$KB" ]] && { echo "Error: --kb required"; exit 1; }
+[[ -z "$TEAM" ]] && { echo "Error: --team required"; exit 1; }
+
+is_url() {
+  [[ "$1" =~ ^(https://|git@|git://|ssh://) ]] || [[ "$1" == *.git ]]
+}
+
+# --- 1. Resolve KB_PATH -----------------------------------------------------
+
+KB_PATH=""
+
+if is_url "$KB"; then
+  REPO_NAME="$(basename "$KB" .git)"
+  KB_PATH="${INTO:-$HOME/dev/$REPO_NAME}"
+  KB_PATH="${KB_PATH/#~/$HOME}"
+  if [[ -d "$KB_PATH/.git" ]]; then
+    echo "→ Pulling existing clone at $KB_PATH"
+    git -C "$KB_PATH" pull --ff-only
+  else
+    mkdir -p "$(dirname "$KB_PATH")"
+    echo "→ Cloning $KB → $KB_PATH"
+    git clone "$KB" "$KB_PATH"
+  fi
+else
+  KB_PATH="${KB/#~/$HOME}"
+  if [[ ! -d "$KB_PATH" ]]; then
+    echo "→ Path $KB_PATH does not exist; scaffolding from template"
+    SCAFFOLD_ARGS=("$KB_PATH")
+    SCAFFOLD_ARGS+=(--name "${GH_NAME:-$(basename "$KB_PATH")}")
+    if [[ "$GH_CREATE" -eq 1 ]]; then
+      SCAFFOLD_ARGS+=(--gh-create "$GH_VIS")
+    fi
+    "$PLUGIN_REPO/scripts/bootstrap-kb.sh" "${SCAFFOLD_ARGS[@]}"
+  fi
+fi
+
+KB_PATH="$(cd "$KB_PATH" && pwd)"
+[[ -d "$KB_PATH/chronicles" ]] || { echo "Error: $KB_PATH has no chronicles/ subdir. Wrong repo?"; exit 1; }
+
+# --- 2. Codex hooks feature flag -------------------------------------------
+
+CONFIG_TOML="$CODEX_HOME/config.toml"
+mkdir -p "$CODEX_HOME"
+if ! grep -q 'codex_hooks' "$CONFIG_TOML" 2>/dev/null; then
+  echo "→ Enabling [features] codex_hooks = true in $CONFIG_TOML"
+  printf '\n[features]\ncodex_hooks = true\n' >> "$CONFIG_TOML"
+fi
+
+# --- 3. Plugin symlink ------------------------------------------------------
+
+mkdir -p "$CODEX_HOME/plugins"
+rm -rf "$PLUGIN_DEST"
+ln -s "$PLUGIN_REPO/plugin" "$PLUGIN_DEST"
+echo "→ Linked plugin: $PLUGIN_DEST → $PLUGIN_REPO/plugin"
+
+# --- 4. Chronicles symlink --------------------------------------------------
+
+ln -sfn "$KB_PATH/chronicles" "$HOME/.chronicle-team-chronicles"
+echo "→ Linked chronicles: $HOME/.chronicle-team-chronicles → $KB_PATH/chronicles"
+
+# --- 5. Hooks.json ----------------------------------------------------------
+
+HOOKS_SRC="$PLUGIN_REPO/plugin/hooks.json"
+HOOKS_DEST="$CODEX_HOME/hooks.json"
+if [[ -f "$HOOKS_DEST" ]] && ! cmp -s "$HOOKS_SRC" "$HOOKS_DEST"; then
+  cp "$HOOKS_DEST" "$HOOKS_DEST.bak.$(date +%s)"
+  echo "→ Existing $HOOKS_DEST backed up; will overwrite. Re-merge by hand if needed."
+fi
+cp "$HOOKS_SRC" "$HOOKS_DEST"
+
+# --- 6. Env file (idempotent rewrite) ---------------------------------------
+
+cat > "$ENV_FILE" <<EOF
+# chronicle-team plugin env. Auto-generated by setup.sh.
+export CHRONICLE_PLUGIN="$PLUGIN_DEST"
+export CHRONICLES_KB_PATH="$KB_PATH"
+export CHRONICLES_ROOT="\$HOME/.chronicle-team-chronicles"
+export CHRONICLE_QUEUE="\$HOME/.chronicle-team/queue"
+export CHRONICLE_TEAM="$TEAM"
+EOF
+echo "→ Wrote $ENV_FILE"
+
+# --- 7. MCP deps ------------------------------------------------------------
+
+echo "→ Installing MCP server deps"
+( cd "$PLUGIN_REPO/plugin/mcp" && npm install --silent )
+
+# --- 8. Auto-source from shell rc ------------------------------------------
+
+if [[ "$SKIP_SHELL_RC" -eq 0 ]]; then
+  for RC in ~/.zshrc ~/.bashrc; do
+    [[ -f "$RC" ]] || continue
+    if ! grep -q 'source ~/.chronicle-team.env' "$RC" 2>/dev/null; then
+      printf '\n# chronicle-team plugin env\nsource ~/.chronicle-team.env\n' >> "$RC"
+      echo "→ Appended source line to $RC"
+    fi
+  done
+fi
+
+# --- 9. Smoke test ----------------------------------------------------------
+
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+SMOKE="$(TEAM="$TEAM" CHRONICLES_ROOT="$CHRONICLES_ROOT" node "$PLUGIN_REPO/plugin/mcp/search.js" "test" 1 2>/dev/null || true)"
+
+echo ""
+echo "✓ Setup complete."
+echo "  Plugin:        $PLUGIN_DEST"
+echo "  KB repo:       $KB_PATH"
+echo "  Team:          $TEAM"
+echo "  Env file:      $ENV_FILE"
+echo ""
+if [[ -n "$SMOKE" ]]; then
+  echo "  MCP search smoke test: PASS (returned a chronicle)"
+else
+  echo "  MCP search smoke test: empty (KB has no chronicles yet — expected for a fresh scaffold)"
+fi
+echo ""
+echo "Open a new shell (or \`source ~/.chronicle-team.env\`) and run:"
+echo "  codex"

@@ -11,38 +11,55 @@ Plugin is single-install. KB repo is per-team or per-org and bootstrapped from `
 
 ## Quick start
 
-```bash
-# 0. Codex hooks on
-echo -e '[features]\ncodex_hooks = true' >> ~/.codex/config.toml
+One command. Non-interactive. Pass the KB repo (URL or local path) and a team slug. Done.
 
-# 1. Clone plugin repo
+```bash
 git clone https://github.com/jorgelameirasilva/team-chronicles-poc.git
 cd team-chronicles-poc
 
-# 2. MCP deps
-cd plugin/mcp && npm install && cd ../..
+# Pick ONE of the three:
 
-# 3. Install (will prompt for KB path or scaffold a new one)
-./scripts/install.sh
+# A. KB already on GitHub — clone + wire
+./scripts/setup.sh --kb git@github.com:acme/team-chronicles.git --team platform
 
-# 4. Source env, set team, start codex
-echo 'source ~/.chronicle-team.env' >> ~/.zshrc
-source ~/.chronicle-team.env
-export CHRONICLE_TEAM=platform
+# B. KB already on disk — wire only
+./scripts/setup.sh --kb ~/dev/team-chronicles --team platform
+
+# C. Brand new KB — scaffold from template + push to GitHub + wire
+./scripts/setup.sh --kb ~/dev/team-chronicles --team platform --gh-create
+
+# Open a new shell (or `source ~/.chronicle-team.env`) — done.
 codex
 ```
 
-## What `install.sh` does
+`setup.sh` does everything: enables `codex_hooks`, clones / scaffolds the KB, symlinks plugin into `~/.codex/plugins/`, copies `hooks.json`, writes `~/.chronicle-team.env`, installs MCP deps, appends `source` line to `~/.zshrc` / `~/.bashrc`, runs an MCP smoke test.
 
-1. Resolves the KB repo path:
-   - `--kb <path>` flag, OR
-   - `CHRONICLES_KB_PATH` env, OR
-   - existing entry in `~/.chronicle-team.env`, OR
-   - interactive prompt — offers to scaffold a new KB via `bootstrap-kb.sh`
-2. Symlinks `~/.codex/plugins/chronicle-team` → this repo's `plugin/`
-3. Symlinks `~/.chronicle-team-chronicles` → `<kb-path>/chronicles`
-4. Copies `plugin/hooks.json` → `~/.codex/hooks.json` (or backs up + asks for hand-merge)
-5. Writes `~/.chronicle-team.env` with `CHRONICLE_PLUGIN`, `CHRONICLES_KB_PATH`, `CHRONICLES_ROOT`, `CHRONICLE_QUEUE`, `CHRONICLE_TEAM`
+### setup.sh flags
+
+| Flag | Meaning |
+|---|---|
+| `--kb <url\|path>` | **Required.** Git URL → cloned. Existing local path → used. Missing path → scaffolded from `templates/kb-repo/`. |
+| `--team <slug>` | **Required.** Sets `CHRONICLE_TEAM` (e.g. `platform`, `growth`). |
+| `--into <path>` | Where to clone a URL (default: `~/dev/<repo-name>`). |
+| `--gh-create` | When scaffolding a missing path, also `gh repo create --push`. |
+| `--gh-private` / `--gh-public` | Visibility for `--gh-create` (default: private). |
+| `--gh-name <name>` | Override repo name on GitHub. |
+| `--no-shell-rc` | Skip auto-appending source line to `~/.zshrc` / `~/.bashrc`. |
+
+## What setup.sh does
+
+1. Resolves `--kb`:
+   - URL → `git clone` to `~/dev/<repo-name>` (or `--into`); pulls if already cloned
+   - Existing path → uses it (must contain `chronicles/`)
+   - Missing path → invokes `bootstrap-kb.sh` to scaffold from `templates/kb-repo/`
+2. Ensures `[features] codex_hooks = true` in `~/.codex/config.toml`
+3. Symlinks `~/.codex/plugins/chronicle-team` → this repo's `plugin/`
+4. Symlinks `~/.chronicle-team-chronicles` → `<kb-path>/chronicles`
+5. Copies `plugin/hooks.json` → `~/.codex/hooks.json` (backs up any existing)
+6. Writes `~/.chronicle-team.env` with `CHRONICLE_PLUGIN`, `CHRONICLES_KB_PATH`, `CHRONICLES_ROOT`, `CHRONICLE_QUEUE`, `CHRONICLE_TEAM`
+7. `npm install` in `plugin/mcp/`
+8. Appends `source ~/.chronicle-team.env` to `~/.zshrc` and `~/.bashrc` if absent
+9. Runs MCP search smoke test, prints PASS / empty
 
 ## Bootstrap a new KB repo
 
