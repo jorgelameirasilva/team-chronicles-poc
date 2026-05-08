@@ -217,16 +217,21 @@ else
   echo "    codex plugin marketplace add $PLUGIN_REPO"
 fi
 
-# --- 7b. Install memory-watcher daemon -------------------------------------
+# --- 7b. Memory watcher (opt-in) -------------------------------------------
 # Watches ~/.codex/memories and ~/.codex/memories_extensions/chronicle for new
-# auto-generated memories from Codex. Runs harvest.js on each new file → atom
-# drafts → branch + push to KB. Auto-PR if CHRONICLE_AUTO_PR=1.
+# auto-generated memories from Codex. Off by default — Codex's chronicle dir
+# may be TCC-protected on macOS and the watcher would need Full Disk Access.
+# Hooks (Stop + PreCompact) already harvest from in-session transcripts, so
+# the watcher is bonus, not required.
+#
+# Enable explicitly:
+#   ./scripts/install-watcher.sh
 
-if "$PLUGIN_REPO/scripts/install-watcher.sh" 2>&1 | sed 's/^/  /'; then
-  echo "✓ Memory watcher installed"
-else
-  echo "→ Memory watcher install failed; run manually: ./scripts/install-watcher.sh"
-fi
+echo ""
+echo "→ Memory watcher NOT auto-installed (may need TCC permission on macOS)."
+echo "  Hooks alone harvest from active sessions — no watcher needed for the basic flow."
+echo "  To also tap into Codex's auto-summarized memories, enable the watcher manually:"
+echo "    $PLUGIN_REPO/scripts/install-watcher.sh"
 
 # --- 8. Auto-source from shell rc ------------------------------------------
 

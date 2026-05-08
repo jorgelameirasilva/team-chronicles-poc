@@ -34,16 +34,24 @@ scan_once() {
   local now seen new_count=0
   now=$(date +%s)
   for dir in "${DIRS[@]}"; do
+    # Skip silently if dir absent or unreadable (macOS TCC may block
+    # ~/.codex/memories_extensions/chronicle/ unless the parent process has
+    # Full Disk Access).
     [[ -d "$dir" ]] || continue
+    if ! [ -r "$dir" ]; then
+      continue
+    fi
+    # `find` with -prune-style safety: bail per-dir on permission errors,
+    # never crash the whole loop.
     while IFS= read -r f; do
       [[ -z "$f" ]] && continue
       if ! grep -qF "$f" "$STATE_FILE" 2>/dev/null; then
         echo "$f" >> "$STATE_FILE"
         echo "memory-watcher: new memory $f"
-        node "$HARVEST" "$f" 2>&1 | sed 's/^/  /'
-        ((new_count++))
+        node "$HARVEST" "$f" 2>&1 | sed 's/^/  /' || true
+        ((new_count++)) || true
       fi
-    done < <(find "$dir" -type f -name '*.md' 2>/dev/null)
+    done < <(find "$dir" -type f -name '*.md' 2>/dev/null || true)
   done
   return 0
 }
